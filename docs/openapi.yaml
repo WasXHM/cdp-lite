@@ -1,0 +1,2982 @@
+openapi: 3.1.0
+info:
+  title: CDP Lite API
+  version: 1.0.0
+  description: 本地受控演示管理员模式，无公网鉴权。只保存规则，不执行人群计算。时间统一 UTC ISO 8601。400 格式错误；404
+    不存在；409 引用、编码、revision 冲突；422 语义校验失败；500 内部错误。
+servers:
+  - url: http://localhost:3000/api/v1
+    description: 本地开发
+paths:
+  /metadata:
+    parameters: []
+    get:
+      summary: 标签 / 属性列表
+      tags:
+        - 标签 / 属性
+      parameters:
+        - &a2
+          name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - &a3
+          name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - &a4
+          name: keyword
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+        - &a5
+          name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - ENABLED
+              - DISABLED
+              - DRAFT
+              - CONFIGURED
+        - &a6
+          name: sortBy
+          in: query
+          schema:
+            type: string
+            enum:
+              - name
+              - createdAt
+              - updatedAt
+            default: updatedAt
+        - &a7
+          name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum:
+              - ASC
+              - DESC
+            default: DESC
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum:
+              - TAG
+              - ATTRIBUTE
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Metadata"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: &a1
+          $ref: "#/components/responses/Error"
+    post:
+      summary: 创建标签 / 属性
+      tags:
+        - 标签 / 属性
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetadataInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Metadata"
+        default: *a1
+  /metadata/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 标签 / 属性详情
+      tags:
+        - 标签 / 属性
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Metadata"
+        default: *a1
+    patch:
+      summary: 部分更新标签 / 属性
+      tags:
+        - 标签 / 属性
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetadataPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Metadata"
+        default: *a1
+    delete:
+      summary: 删除标签 / 属性
+      tags:
+        - 标签 / 属性
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /metadata/{id}/enum-values:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 元数据枚举值列表
+      tags:
+        - 元数据枚举值
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnumValue"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建元数据枚举值
+      tags:
+        - 元数据枚举值
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnumInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnumValue"
+        default: *a1
+  /metadata/{id}/enum-values/{valueId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: valueId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 部分更新元数据枚举值
+      tags:
+        - 元数据枚举值
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnumPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnumValue"
+        default: *a1
+    delete:
+      summary: 删除元数据枚举值
+      tags:
+        - 元数据枚举值
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /event-models:
+    parameters: []
+    get:
+      summary: 行为模型列表
+      tags:
+        - 行为模型
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventModel"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建行为模型
+      tags:
+        - 行为模型
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EventModel"
+        default: *a1
+  /event-models/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 行为模型详情
+      tags:
+        - 行为模型
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EventModel"
+        default: *a1
+    patch:
+      summary: 部分更新行为模型
+      tags:
+        - 行为模型
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EventModel"
+        default: *a1
+    delete:
+      summary: 删除行为模型
+      tags:
+        - 行为模型
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /event-models/{id}/dimensions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 行为维度列表
+      tags:
+        - 行为维度
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Dimension"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建行为维度
+      tags:
+        - 行为维度
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DimensionInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Dimension"
+        default: *a1
+  /event-models/{id}/dimensions/{dimensionId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: dimensionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 部分更新行为维度
+      tags:
+        - 行为维度
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DimensionPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Dimension"
+        default: *a1
+    delete:
+      summary: 删除行为维度
+      tags:
+        - 行为维度
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /event-models/{id}/dimensions/{dimensionId}/values:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: dimensionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 维度枚举值列表
+      tags:
+        - 维度枚举值
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EnumValue"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建维度枚举值
+      tags:
+        - 维度枚举值
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnumInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnumValue"
+        default: *a1
+  /event-models/{id}/dimensions/{dimensionId}/values/{valueId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: dimensionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: valueId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 部分更新维度枚举值
+      tags:
+        - 维度枚举值
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnumPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/EnumValue"
+        default: *a1
+    delete:
+      summary: 删除维度枚举值
+      tags:
+        - 维度枚举值
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /event-models/{id}/metrics:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 行为指标列表
+      tags:
+        - 行为指标
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Metric"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建行为指标
+      tags:
+        - 行为指标
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetricInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Metric"
+        default: *a1
+  /event-models/{id}/metrics/{metricId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: metricId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: 部分更新行为指标
+      tags:
+        - 行为指标
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetricPatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Metric"
+        default: *a1
+    delete:
+      summary: 删除行为指标
+      tags:
+        - 行为指标
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /audiences:
+    parameters: []
+    get:
+      summary: 人群列表
+      tags:
+        - 人群
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+      responses:
+        "200":
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - pagination
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AudienceSummary"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+    post:
+      summary: 创建人群
+      tags:
+        - 人群
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AudienceInput"
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Audience"
+        default: *a1
+  /audiences/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: 人群详情
+      tags:
+        - 人群
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Audience"
+        default: *a1
+    patch:
+      summary: 部分更新人群
+      tags:
+        - 人群
+      description: 编码、数据类型、枚举开关、所属父级不可改变；人群更新必须携带当前 revision。枚举值编码仅在未被引用时可修改。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AudiencePatch"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Audience"
+        default: *a1
+    delete:
+      summary: 删除人群
+      tags:
+        - 人群
+      description: 被引用资源返回 409；删除未引用父级时事务内删除其子资源。
+      responses:
+        "204":
+          description: 删除成功，无响应体
+        default: *a1
+  /audiences/validate-rules:
+    post:
+      summary: 规则预校验
+      tags:
+        - 人群
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - rules
+              properties:
+                rules:
+                  $ref: "#/components/schemas/Rules"
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        const: true
+        default: *a1
+  /audiences/{id}/copy:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: 复制人群为独立草稿
+      tags:
+        - 人群
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Audience"
+        default: *a1
+  /rule-catalog:
+    get:
+      summary: 启用的规则选项（不加载全部事件子资源）
+      parameters:
+        - *a2
+        - *a3
+        - *a4
+        - *a5
+        - *a6
+        - *a7
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - TAG
+              - ATTRIBUTE
+              - EVENT
+      responses:
+        "200":
+          description: 启用对象分页列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: "#/components/schemas/Metadata"
+                        - $ref: "#/components/schemas/EventModel"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        default: *a1
+components:
+  schemas:
+    MetadataInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+        metadataType:
+          type: string
+          enum:
+            - TAG
+            - ATTRIBUTE
+      required:
+        - name
+        - fieldName
+        - dataType
+        - displayType
+        - metadataType
+      additionalProperties: false
+    MetadataPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+        metadataType:
+          type: string
+          enum:
+            - TAG
+            - ATTRIBUTE
+      additionalProperties: false
+    Metadata:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+        metadataType:
+          type: string
+          enum:
+            - TAG
+            - ATTRIBUTE
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        enumValues:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+                minLength: 1
+                maxLength: 100
+              value:
+                anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 100
+                  - type: number
+              sortOrder:
+                type: integer
+                minimum: 0
+                maximum: 100000
+                default: 0
+              status:
+                type: string
+                enum:
+                  - ENABLED
+                  - DISABLED
+                default: ENABLED
+              id:
+                type: string
+                format: uuid
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+            required:
+              - label
+              - value
+              - id
+              - createdAt
+              - updatedAt
+            additionalProperties: false
+      required:
+        - name
+        - fieldName
+        - dataType
+        - displayType
+        - metadataType
+        - id
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+    EnumInput:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+        value:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 100
+            - type: number
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          default: 0
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+      required:
+        - label
+        - value
+      additionalProperties: false
+    EnumPatch:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+        value:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 100
+            - type: number
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          default: 0
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+      additionalProperties: false
+    EnumValue:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+        value:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 100
+            - type: number
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 100000
+          default: 0
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - label
+        - value
+        - id
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+    EventInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        eventCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+      required:
+        - name
+        - eventCode
+      additionalProperties: false
+    EventPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        eventCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+      additionalProperties: false
+    EventModel:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        eventCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        dimensions:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 100
+              description:
+                type: string
+                maxLength: 1000
+                default: ""
+              status:
+                type: string
+                enum:
+                  - ENABLED
+                  - DISABLED
+                default: ENABLED
+              fieldName:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+              dataType:
+                type: string
+                enum:
+                  - String
+                  - Number
+                  - Boolean
+                  - Date
+                  - DateTime
+              displayType:
+                type: string
+                enum:
+                  - TEXT
+                  - NUMBER
+                  - SELECT
+                  - MULTI_SELECT
+                  - BOOLEAN
+                  - DATE
+                  - DATETIME
+              isEnum:
+                type: boolean
+                default: false
+              id:
+                type: string
+                format: uuid
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+              eventModelId:
+                type: string
+                format: uuid
+              enumValues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    label:
+                      type: string
+                      minLength: 1
+                      maxLength: 100
+                    value:
+                      anyOf:
+                        - type: string
+                          minLength: 1
+                          maxLength: 100
+                        - type: number
+                    sortOrder:
+                      type: integer
+                      minimum: 0
+                      maximum: 100000
+                      default: 0
+                    status:
+                      type: string
+                      enum:
+                        - ENABLED
+                        - DISABLED
+                      default: ENABLED
+                    id:
+                      type: string
+                      format: uuid
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
+                  required:
+                    - label
+                    - value
+                    - id
+                    - createdAt
+                    - updatedAt
+                  additionalProperties: false
+            required:
+              - name
+              - fieldName
+              - dataType
+              - displayType
+              - id
+              - createdAt
+              - updatedAt
+              - eventModelId
+            additionalProperties: false
+        metrics:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 100
+              description:
+                type: string
+                maxLength: 1000
+                default: ""
+              status:
+                type: string
+                enum:
+                  - ENABLED
+                  - DISABLED
+                default: ENABLED
+              fieldName:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+              dataType:
+                type: string
+                const: Number
+                default: Number
+              id:
+                type: string
+                format: uuid
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+              eventModelId:
+                type: string
+                format: uuid
+            required:
+              - name
+              - fieldName
+              - id
+              - createdAt
+              - updatedAt
+              - eventModelId
+            additionalProperties: false
+      required:
+        - name
+        - eventCode
+        - id
+        - createdAt
+        - updatedAt
+      additionalProperties: false
+    DimensionInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+      required:
+        - name
+        - fieldName
+        - dataType
+        - displayType
+      additionalProperties: false
+    DimensionPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+      additionalProperties: false
+    Dimension:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          enum:
+            - String
+            - Number
+            - Boolean
+            - Date
+            - DateTime
+        displayType:
+          type: string
+          enum:
+            - TEXT
+            - NUMBER
+            - SELECT
+            - MULTI_SELECT
+            - BOOLEAN
+            - DATE
+            - DATETIME
+        isEnum:
+          type: boolean
+          default: false
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        eventModelId:
+          type: string
+          format: uuid
+        enumValues:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+                minLength: 1
+                maxLength: 100
+              value:
+                anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 100
+                  - type: number
+              sortOrder:
+                type: integer
+                minimum: 0
+                maximum: 100000
+                default: 0
+              status:
+                type: string
+                enum:
+                  - ENABLED
+                  - DISABLED
+                default: ENABLED
+              id:
+                type: string
+                format: uuid
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+            required:
+              - label
+              - value
+              - id
+              - createdAt
+              - updatedAt
+            additionalProperties: false
+      required:
+        - name
+        - fieldName
+        - dataType
+        - displayType
+        - id
+        - createdAt
+        - updatedAt
+        - eventModelId
+      additionalProperties: false
+    MetricInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          const: Number
+          default: Number
+      required:
+        - name
+        - fieldName
+      additionalProperties: false
+    MetricPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          const: Number
+          default: Number
+      additionalProperties: false
+    Metric:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - ENABLED
+            - DISABLED
+          default: ENABLED
+        fieldName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        dataType:
+          type: string
+          const: Number
+          default: Number
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        eventModelId:
+          type: string
+          format: uuid
+      required:
+        - name
+        - fieldName
+        - id
+        - createdAt
+        - updatedAt
+        - eventModelId
+      additionalProperties: false
+    AudienceInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        audienceCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - CONFIGURED
+            - DISABLED
+          default: CONFIGURED
+        rules:
+          type: array
+          items:
+            type: array
+            items:
+              anyOf:
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: TAG
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: ATTRIBUTE
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: EVENT
+                    eventId:
+                      type: string
+                      format: uuid
+                    timeRange:
+                      anyOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: RELATIVE
+                            unit:
+                              type: string
+                              const: DAY
+                            value:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 36500
+                          required:
+                            - type
+                            - unit
+                            - value
+                          additionalProperties: false
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: ABSOLUTE
+                            start:
+                              type: string
+                              format: date-time
+                            end:
+                              type: string
+                              format: date-time
+                          required:
+                            - type
+                            - start
+                            - end
+                          additionalProperties: false
+                    dimensionFilters:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          dimensionId:
+                            type: string
+                            format: uuid
+                          operator:
+                            type: string
+                            enum:
+                              - EQ
+                              - NE
+                              - GT
+                              - GTE
+                              - LT
+                              - LTE
+                              - IN
+                              - NOT_IN
+                              - BETWEEN
+                              - CONTAINS
+                              - NOT_CONTAINS
+                              - IS_NULL
+                              - IS_NOT_NULL
+                          value:
+                            anyOf:
+                              - anyOf:
+                                  - type: string
+                                    maxLength: 1000
+                                  - type: number
+                                  - type: boolean
+                              - type: array
+                                items:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 1000
+                                    - type: number
+                                    - type: boolean
+                                maxItems: 100
+                              - type: "null"
+                        required:
+                          - dimensionId
+                          - operator
+                          - value
+                        additionalProperties: false
+                      maxItems: 30
+                    aggregation:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum:
+                            - COUNT
+                            - SUM
+                            - AVG
+                            - MAX
+                            - MIN
+                        metricId:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                            - type: "null"
+                      required:
+                        - type
+                        - metricId
+                      additionalProperties: false
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - BETWEEN
+                    value:
+                      anyOf:
+                        - type: number
+                        - type: array
+                          minItems: 2
+                          maxItems: 2
+                          items: true
+                          prefixItems:
+                            - type: number
+                            - type: number
+                  required:
+                    - metadataType
+                    - eventId
+                    - timeRange
+                    - dimensionFilters
+                    - aggregation
+                    - operator
+                    - value
+                  additionalProperties: false
+            minItems: 1
+            maxItems: 50
+          minItems: 1
+          maxItems: 20
+        schemaVersion:
+          type: number
+          const: 1
+          default: 1
+      required:
+        - name
+        - audienceCode
+        - rules
+      additionalProperties: false
+    AudiencePatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        audienceCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - CONFIGURED
+            - DISABLED
+          default: CONFIGURED
+        rules:
+          type: array
+          items:
+            type: array
+            items:
+              anyOf:
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: TAG
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: ATTRIBUTE
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: EVENT
+                    eventId:
+                      type: string
+                      format: uuid
+                    timeRange:
+                      anyOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: RELATIVE
+                            unit:
+                              type: string
+                              const: DAY
+                            value:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 36500
+                          required:
+                            - type
+                            - unit
+                            - value
+                          additionalProperties: false
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: ABSOLUTE
+                            start:
+                              type: string
+                              format: date-time
+                            end:
+                              type: string
+                              format: date-time
+                          required:
+                            - type
+                            - start
+                            - end
+                          additionalProperties: false
+                    dimensionFilters:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          dimensionId:
+                            type: string
+                            format: uuid
+                          operator:
+                            type: string
+                            enum:
+                              - EQ
+                              - NE
+                              - GT
+                              - GTE
+                              - LT
+                              - LTE
+                              - IN
+                              - NOT_IN
+                              - BETWEEN
+                              - CONTAINS
+                              - NOT_CONTAINS
+                              - IS_NULL
+                              - IS_NOT_NULL
+                          value:
+                            anyOf:
+                              - anyOf:
+                                  - type: string
+                                    maxLength: 1000
+                                  - type: number
+                                  - type: boolean
+                              - type: array
+                                items:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 1000
+                                    - type: number
+                                    - type: boolean
+                                maxItems: 100
+                              - type: "null"
+                        required:
+                          - dimensionId
+                          - operator
+                          - value
+                        additionalProperties: false
+                      maxItems: 30
+                    aggregation:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum:
+                            - COUNT
+                            - SUM
+                            - AVG
+                            - MAX
+                            - MIN
+                        metricId:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                            - type: "null"
+                      required:
+                        - type
+                        - metricId
+                      additionalProperties: false
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - BETWEEN
+                    value:
+                      anyOf:
+                        - type: number
+                        - type: array
+                          minItems: 2
+                          maxItems: 2
+                          items: true
+                          prefixItems:
+                            - type: number
+                            - type: number
+                  required:
+                    - metadataType
+                    - eventId
+                    - timeRange
+                    - dimensionFilters
+                    - aggregation
+                    - operator
+                    - value
+                  additionalProperties: false
+            minItems: 1
+            maxItems: 50
+          minItems: 1
+          maxItems: 20
+        schemaVersion:
+          type: number
+          const: 1
+          default: 1
+        revision:
+          type: integer
+          exclusiveMinimum: 0
+      required:
+        - revision
+      additionalProperties: false
+    Audience:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        audienceCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - CONFIGURED
+            - DISABLED
+          default: CONFIGURED
+        rules:
+          type: array
+          items:
+            type: array
+            items:
+              anyOf:
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: TAG
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: ATTRIBUTE
+                    metadataId:
+                      type: string
+                      format: uuid
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - IN
+                        - NOT_IN
+                        - BETWEEN
+                        - CONTAINS
+                        - NOT_CONTAINS
+                        - IS_NULL
+                        - IS_NOT_NULL
+                    value:
+                      anyOf:
+                        - anyOf:
+                            - type: string
+                              maxLength: 1000
+                            - type: number
+                            - type: boolean
+                        - type: array
+                          items:
+                            anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          maxItems: 100
+                        - type: "null"
+                  required:
+                    - metadataType
+                    - metadataId
+                    - operator
+                    - value
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    metadataType:
+                      type: string
+                      const: EVENT
+                    eventId:
+                      type: string
+                      format: uuid
+                    timeRange:
+                      anyOf:
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: RELATIVE
+                            unit:
+                              type: string
+                              const: DAY
+                            value:
+                              type: integer
+                              exclusiveMinimum: 0
+                              maximum: 36500
+                          required:
+                            - type
+                            - unit
+                            - value
+                          additionalProperties: false
+                        - type: object
+                          properties:
+                            type:
+                              type: string
+                              const: ABSOLUTE
+                            start:
+                              type: string
+                              format: date-time
+                            end:
+                              type: string
+                              format: date-time
+                          required:
+                            - type
+                            - start
+                            - end
+                          additionalProperties: false
+                    dimensionFilters:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          dimensionId:
+                            type: string
+                            format: uuid
+                          operator:
+                            type: string
+                            enum:
+                              - EQ
+                              - NE
+                              - GT
+                              - GTE
+                              - LT
+                              - LTE
+                              - IN
+                              - NOT_IN
+                              - BETWEEN
+                              - CONTAINS
+                              - NOT_CONTAINS
+                              - IS_NULL
+                              - IS_NOT_NULL
+                          value:
+                            anyOf:
+                              - anyOf:
+                                  - type: string
+                                    maxLength: 1000
+                                  - type: number
+                                  - type: boolean
+                              - type: array
+                                items:
+                                  anyOf:
+                                    - type: string
+                                      maxLength: 1000
+                                    - type: number
+                                    - type: boolean
+                                maxItems: 100
+                              - type: "null"
+                        required:
+                          - dimensionId
+                          - operator
+                          - value
+                        additionalProperties: false
+                      maxItems: 30
+                    aggregation:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum:
+                            - COUNT
+                            - SUM
+                            - AVG
+                            - MAX
+                            - MIN
+                        metricId:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                            - type: "null"
+                      required:
+                        - type
+                        - metricId
+                      additionalProperties: false
+                    operator:
+                      type: string
+                      enum:
+                        - EQ
+                        - NE
+                        - GT
+                        - GTE
+                        - LT
+                        - LTE
+                        - BETWEEN
+                    value:
+                      anyOf:
+                        - type: number
+                        - type: array
+                          minItems: 2
+                          maxItems: 2
+                          items: true
+                          prefixItems:
+                            - type: number
+                            - type: number
+                  required:
+                    - metadataType
+                    - eventId
+                    - timeRange
+                    - dimensionFilters
+                    - aggregation
+                    - operator
+                    - value
+                  additionalProperties: false
+            minItems: 1
+            maxItems: 50
+          minItems: 1
+          maxItems: 20
+        schemaVersion:
+          type: number
+          const: 1
+          default: 1
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        revision:
+          type: integer
+          exclusiveMinimum: 0
+        ruleCount:
+          type: integer
+          minimum: 0
+      required:
+        - name
+        - audienceCode
+        - rules
+        - id
+        - createdAt
+        - updatedAt
+        - revision
+        - ruleCount
+      additionalProperties: false
+    AudienceSummary:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        audienceCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+        description:
+          type: string
+          maxLength: 1000
+          default: ""
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - CONFIGURED
+            - DISABLED
+          default: CONFIGURED
+        schemaVersion:
+          type: number
+          const: 1
+          default: 1
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        revision:
+          type: integer
+          exclusiveMinimum: 0
+        ruleCount:
+          type: integer
+          minimum: 0
+      required:
+        - name
+        - audienceCode
+        - id
+        - createdAt
+        - updatedAt
+        - revision
+        - ruleCount
+      additionalProperties: false
+    Rules:
+      type: array
+      items:
+        type: array
+        items:
+          anyOf:
+            - type: object
+              properties:
+                metadataType:
+                  type: string
+                  const: TAG
+                metadataId:
+                  type: string
+                  format: uuid
+                operator:
+                  type: string
+                  enum:
+                    - EQ
+                    - NE
+                    - GT
+                    - GTE
+                    - LT
+                    - LTE
+                    - IN
+                    - NOT_IN
+                    - BETWEEN
+                    - CONTAINS
+                    - NOT_CONTAINS
+                    - IS_NULL
+                    - IS_NOT_NULL
+                value:
+                  anyOf:
+                    - anyOf:
+                        - type: string
+                          maxLength: 1000
+                        - type: number
+                        - type: boolean
+                    - type: array
+                      items:
+                        anyOf:
+                          - type: string
+                            maxLength: 1000
+                          - type: number
+                          - type: boolean
+                      maxItems: 100
+                    - type: "null"
+              required:
+                - metadataType
+                - metadataId
+                - operator
+                - value
+              additionalProperties: false
+            - type: object
+              properties:
+                metadataType:
+                  type: string
+                  const: ATTRIBUTE
+                metadataId:
+                  type: string
+                  format: uuid
+                operator:
+                  type: string
+                  enum:
+                    - EQ
+                    - NE
+                    - GT
+                    - GTE
+                    - LT
+                    - LTE
+                    - IN
+                    - NOT_IN
+                    - BETWEEN
+                    - CONTAINS
+                    - NOT_CONTAINS
+                    - IS_NULL
+                    - IS_NOT_NULL
+                value:
+                  anyOf:
+                    - anyOf:
+                        - type: string
+                          maxLength: 1000
+                        - type: number
+                        - type: boolean
+                    - type: array
+                      items:
+                        anyOf:
+                          - type: string
+                            maxLength: 1000
+                          - type: number
+                          - type: boolean
+                      maxItems: 100
+                    - type: "null"
+              required:
+                - metadataType
+                - metadataId
+                - operator
+                - value
+              additionalProperties: false
+            - type: object
+              properties:
+                metadataType:
+                  type: string
+                  const: EVENT
+                eventId:
+                  type: string
+                  format: uuid
+                timeRange:
+                  anyOf:
+                    - type: object
+                      properties:
+                        type:
+                          type: string
+                          const: RELATIVE
+                        unit:
+                          type: string
+                          const: DAY
+                        value:
+                          type: integer
+                          exclusiveMinimum: 0
+                          maximum: 36500
+                      required:
+                        - type
+                        - unit
+                        - value
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        type:
+                          type: string
+                          const: ABSOLUTE
+                        start:
+                          type: string
+                          format: date-time
+                        end:
+                          type: string
+                          format: date-time
+                      required:
+                        - type
+                        - start
+                        - end
+                      additionalProperties: false
+                dimensionFilters:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      dimensionId:
+                        type: string
+                        format: uuid
+                      operator:
+                        type: string
+                        enum:
+                          - EQ
+                          - NE
+                          - GT
+                          - GTE
+                          - LT
+                          - LTE
+                          - IN
+                          - NOT_IN
+                          - BETWEEN
+                          - CONTAINS
+                          - NOT_CONTAINS
+                          - IS_NULL
+                          - IS_NOT_NULL
+                      value:
+                        anyOf:
+                          - anyOf:
+                              - type: string
+                                maxLength: 1000
+                              - type: number
+                              - type: boolean
+                          - type: array
+                            items:
+                              anyOf:
+                                - type: string
+                                  maxLength: 1000
+                                - type: number
+                                - type: boolean
+                            maxItems: 100
+                          - type: "null"
+                    required:
+                      - dimensionId
+                      - operator
+                      - value
+                    additionalProperties: false
+                  maxItems: 30
+                aggregation:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - COUNT
+                        - SUM
+                        - AVG
+                        - MAX
+                        - MIN
+                    metricId:
+                      anyOf:
+                        - type: string
+                          format: uuid
+                        - type: "null"
+                  required:
+                    - type
+                    - metricId
+                  additionalProperties: false
+                operator:
+                  type: string
+                  enum:
+                    - EQ
+                    - NE
+                    - GT
+                    - GTE
+                    - LT
+                    - LTE
+                    - BETWEEN
+                value:
+                  anyOf:
+                    - type: number
+                    - type: array
+                      minItems: 2
+                      maxItems: 2
+                      items: true
+                      prefixItems:
+                        - type: number
+                        - type: number
+              required:
+                - metadataType
+                - eventId
+                - timeRange
+                - dimensionFilters
+                - aggregation
+                - operator
+                - value
+              additionalProperties: false
+        minItems: 1
+        maxItems: 50
+      minItems: 1
+      maxItems: 20
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - path
+                  - message
+                additionalProperties: false
+            requestId:
+              type: string
+              format: uuid
+          required:
+            - code
+            - message
+            - details
+            - requestId
+          additionalProperties: false
+      required:
+        - error
+      additionalProperties: false
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          exclusiveMinimum: 0
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+      required:
+        - page
+        - pageSize
+        - total
+      additionalProperties: false
+  responses:
+    Error:
+      description: 统一错误；details.path 指向字段或具体规则
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

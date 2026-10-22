@@ -1,0 +1,39 @@
+{
+  "name": "@cdp/webapi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit && tsup",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "tsx src/migrations/run.ts",
+    "db:seed": "tsx src/migrations/seed.ts",
+    "docs:api": "tsx src/schemas/openapi.ts"
+  },
+  "dependencies": {
+    "@cdp/contracts": "workspace:*",
+    "@koa/cors": "^5.0.0",
+    "@koa/router": "^13.1.1",
+    "dotenv": "^16.6.1",
+    "koa": "^2.16.2",
+    "koa-bodyparser": "^4.4.1",
+    "koa-helmet": "^8.0.1",
+    "mysql2": "^3.15.3",
+    "sequelize": "^6.37.7",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/koa": "^2.15.0",
+    "@types/koa-bodyparser": "^4.3.12",
+    "@types/koa__cors": "^5.0.0",
+    "@types/koa__router": "^12.0.4",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "yaml": "^2.9.1",
+    "zod-to-json-schema": "^3.25.2"
+  }
+}

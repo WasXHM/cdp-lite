@@ -1,0 +1,30 @@
+{
+  "name": "cdp-lite",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.3",
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "build": "pnpm --filter @cdp/contracts build && pnpm --filter @cdp/webapi build && pnpm --filter @cdp/webapp build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:integration": "CDP_INTEGRATION=1 vitest run apps/webapi/src/__tests__/integration.test.ts",
+    "test:e2e": "playwright test",
+    "db:migrate": "pnpm --filter @cdp/webapi db:migrate",
+    "db:seed": "pnpm --filter @cdp/webapi db:seed",
+    "docs:api": "pnpm --filter @cdp/webapi docs:api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.18.0",
+    "eslint": "^9.37.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.4"
+  }
+}
