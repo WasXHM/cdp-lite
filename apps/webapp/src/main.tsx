@@ -7,6 +7,7 @@ import zhCN from 'antd/locale/zh_CN';
 import 'dayjs/locale/zh-cn';
 import dayjs from 'dayjs';
 import { AppLayout } from './app/App';
+import { AuthProvider } from './features/auth/AuthProvider';
 import { ResourceList } from './pages/ResourceList';
 import { workspaceTheme, installWorkspaceTokens } from './styles/theme';
 import './styles/app.css';
@@ -16,8 +17,9 @@ dayjs.locale('zh-cn');
 const MetadataEdit = lazy(() => import('./pages/MetadataEdit').then(module => ({ default: module.MetadataEdit })));
 const EventEdit = lazy(() => import('./pages/EventEdit').then(module => ({ default: module.EventEdit })));
 const AudienceEdit = lazy(() => import('./pages/AudienceEdit').then(module => ({ default: module.AudienceEdit })));
+const Settings = lazy(() => import('./pages/Settings'));
 const router = createBrowserRouter([{
-  element: <AppLayout />,
+  element: <AuthProvider><AppLayout /></AuthProvider>,
   errorElement: <Result status="error" title="页面加载失败" subTitle="请刷新页面后重试。" />,
   children: [
     { index: true, element: <Navigate to="/audiences" replace /> },
@@ -30,6 +32,7 @@ const router = createBrowserRouter([{
         { path: `${path}/:id/edit`, element: <Suspense fallback={<Skeleton active />}>{editor}</Suspense> },
       ];
     }),
+    { path: '/settings', element: <Suspense fallback={<Skeleton active />}><Settings /></Suspense> },
     { path: '*', element: <Result status="404" title="页面不存在" /> },
   ],
 }]);

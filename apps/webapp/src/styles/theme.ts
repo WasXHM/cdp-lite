@@ -10,9 +10,9 @@ export const workspaceTokens = {
   'shadow-popup': '0 4px 16px rgb(28 39 58 / 12%)',
   'sidebar-width': '180px', 'topbar-height': '52px', 'page-padding': '12px',
   'control-height': '32px', 'control-height-mobile': '40px',
-  'font-sans': '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
+  'font-sans': 'monaco, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
   'font-mono': '"SFMono-Regular", Consolas, monospace',
-  'font-body': '14px', 'font-helper': '12px', 'font-title': '16px',
+  'font-body': '13px', 'font-helper': '12px', 'font-title': '16px',
   'motion-fast': '120ms', 'motion-base': '180ms',
 } as const;
 
@@ -30,7 +30,7 @@ export const workspaceTheme: ThemeConfig = {
     colorBgLayout: workspaceTokens.canvas, colorBgContainer: workspaceTokens.surface,
     colorFillAlter: workspaceTokens.inset, colorLink: workspaceTokens.accent, colorLinkHover: workspaceTokens['accent-hover'],
     borderRadius: 2, borderRadiusLG: 2, borderRadiusSM: 2,
-    controlHeight: 32, controlHeightSM: 28, fontSize: 14, fontFamily: workspaceTokens['font-sans'],
+    controlHeight: 32, controlHeightSM: 28, fontSize: 13, fontFamily: workspaceTokens['font-sans'],
     motionDurationFast: workspaceTokens['motion-fast'], motionDurationMid: workspaceTokens['motion-base'],
     boxShadow: workspaceTokens['shadow-popup'], boxShadowSecondary: workspaceTokens['shadow-popup'],
   },

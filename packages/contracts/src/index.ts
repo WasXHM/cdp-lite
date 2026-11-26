@@ -67,6 +67,127 @@ export const listQuerySchema = z.object({
   sortBy: z.enum(['name', 'createdAt', 'updatedAt']).default('updatedAt'),
   sortOrder: z.enum(['ASC', 'DESC']).default('DESC'),
 }).strict();
+
+export const aiAudienceResourceTypeSchema = z.enum(['TAG', 'ATTRIBUTE', 'EVENT', 'DIMENSION', 'METRIC']);
+export const aiAudienceParameterSourceSchema = z.enum(['USER_EXPLICIT', 'METADATA_DEFINED', 'AI_DERIVED']);
+export const aiAudienceResourceRefSchema = z.object({
+  resourceType: aiAudienceResourceTypeSchema,
+  resourceId: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+}).strict();
+export const aiAudienceClarificationSchema = z.object({
+  key: z.string().trim().min(1).max(64),
+  sourceText: z.string().trim().min(1).max(300),
+  resourceType: aiAudienceResourceTypeSchema,
+  resourceId: z.string().uuid(),
+}).strict();
+export const aiAudienceGenerateRequestSchema = z.object({
+  prompt: z.string().trim().min(1, '请输入人群特点').max(1000, '人群描述不能超过 1000 个字符'),
+  clarifications: z.array(aiAudienceClarificationSchema).max(20).default([]),
+}).strict();
+export const usernameSchema = z.string().trim().toLowerCase().min(3, '用户名至少 3 个字符').max(64, '用户名不能超过 64 个字符')
+  .regex(/^[a-z0-9][a-z0-9._-]*$/, '用户名只能包含小写字母、数字、点、下划线和连字符');
+export const authLoginInputSchema = z.object({
+  username: usernameSchema,
+  password: z.string().min(1, '请输入密码').max(256, '密码不能超过 256 个字符'),
+}).strict();
+export const userRoleSchema = z.enum(['ADMIN', 'USER']);
+export const authUserSchema = z.object({
+  id: z.string().uuid(), username: usernameSchema, displayName: z.string().trim().min(1).max(100), role: userRoleSchema,
+}).strict();
+const userPasswordSchema = z.string().min(12, '密码至少 12 个字符').max(256, '密码不能超过 256 个字符');
+export const managedUserSchema = authUserSchema.extend({
+  status: statusSchema,
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).strict();
+export const createUserInputSchema = z.object({
+  username: usernameSchema,
+  password: userPasswordSchema,
+  displayName: z.string().trim().min(1, '显示名称不能为空').max(100),
+  role: userRoleSchema.default('USER'),
+  status: statusSchema.default('ENABLED'),
+}).strict();
+export const updateUserInputSchema = z.object({
+  username: usernameSchema.optional(),
+  password: userPasswordSchema.optional(),
+  displayName: z.string().trim().min(1, '显示名称不能为空').max(100).optional(),
+  role: userRoleSchema.optional(),
+  status: statusSchema.optional(),
+}).strict().refine(value => Object.keys(value).length > 0, '至少需要修改一个字段');
+export const userListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  keyword: z.string().trim().max(100).optional(),
+  role: userRoleSchema.optional(),
+  status: statusSchema.optional(),
+}).strict();
+export const aiAudienceSignalSchema = aiAudienceResourceRefSchema.extend({
+  role: z.string().trim().min(1).max(100),
+  reason: z.string().trim().min(1).max(300),
+});
+export const aiAudienceParameterSchema = z.object({
+  path: z.string().regex(/^rules\[\d+\]\[\d+\](?:\.[A-Za-z][A-Za-z0-9]*|\[\d+\])*$/).max(200),
+  label: z.string().trim().min(1).max(100),
+  value: z.union([ruleValueSchema, timeRangeSchema]),
+  displayValue: z.string().trim().min(1).max(200),
+  source: aiAudienceParameterSourceSchema,
+  explanation: z.string().trim().min(1).max(300),
+}).strict();
+export const aiAudienceDerivationSchema = z.object({
+  concept: z.string().trim().min(1).max(100),
+  suggestedDefinition: z.string().trim().min(1).max(500),
+  signals: z.array(aiAudienceSignalSchema).min(1).max(10),
+}).strict();
+const aiRulePathSchema = z.string().regex(/^rules\[\d+\]\[\d+\]$/).max(64);
+const aiCandidateSchema = aiAudienceResourceRefSchema.extend({ description: z.string().trim().max(300).default('') });
+const aiMappingBase = {
+  key: z.string().trim().min(1).max(64),
+  sourceText: z.string().trim().min(1).max(300),
+  explanation: z.string().trim().min(1).max(500),
+};
+export const aiAudienceMappingSchema = z.discriminatedUnion('status', [
+  z.object({
+    ...aiMappingBase, status: z.literal('MAPPED'), resource: aiAudienceResourceRefSchema,
+    rulePaths: z.array(aiRulePathSchema).min(1).max(20), parameters: z.array(aiAudienceParameterSchema).max(30).default([]),
+    derivation: z.null().default(null), candidates: z.array(aiCandidateSchema).max(0).default([]),
+  }).strict(),
+  z.object({
+    ...aiMappingBase, status: z.literal('DERIVED'), resource: z.null(),
+    rulePaths: z.array(aiRulePathSchema).min(1).max(20), parameters: z.array(aiAudienceParameterSchema).min(1).max(30),
+    derivation: aiAudienceDerivationSchema, candidates: z.array(aiCandidateSchema).max(0).default([]),
+  }).strict(),
+  z.object({
+    ...aiMappingBase, status: z.literal('NEEDS_CONFIRMATION'), resource: z.null(), rulePaths: z.array(aiRulePathSchema).max(0).default([]),
+    parameters: z.array(aiAudienceParameterSchema).max(0).default([]), derivation: z.null().default(null),
+    candidates: z.array(aiCandidateSchema).min(1).max(5),
+  }).strict(),
+  z.object({
+    ...aiMappingBase, status: z.literal('UNMAPPED'), resource: z.null(), rulePaths: z.array(aiRulePathSchema).max(0).default([]),
+    parameters: z.array(aiAudienceParameterSchema).max(0).default([]), derivation: z.null().default(null),
+    candidates: z.array(aiCandidateSchema).max(0).default([]),
+  }).strict(),
+]);
+export const aiAudienceGenerateResultSchema = z.object({
+  requestId: z.string().uuid(),
+  catalogRevision: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  summary: z.string().trim().min(1).max(1000),
+  rules: rulesSchema.nullable(),
+  mappings: z.array(aiAudienceMappingSchema).min(1).max(100),
+  warnings: z.array(z.string().trim().min(1).max(500)).max(20),
+  requiresConfirmation: z.boolean(),
+  hasUnmappedSegments: z.boolean(),
+}).strict().superRefine((result, context) => {
+  const requiresConfirmation = result.mappings.some(mapping => mapping.status === 'NEEDS_CONFIRMATION');
+  const hasUnmappedSegments = result.mappings.some(mapping => mapping.status === 'UNMAPPED');
+  const hasRules = result.mappings.some(mapping => mapping.status === 'MAPPED' || mapping.status === 'DERIVED');
+  if (result.requiresConfirmation !== requiresConfirmation)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['requiresConfirmation'], message: '确认状态与映射结果不一致' });
+  if (result.hasUnmappedSegments !== hasUnmappedSegments)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['hasUnmappedSegments'], message: '未映射状态与映射结果不一致' });
+  if ((result.rules !== null) !== hasRules)
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['rules'], message: '规则草稿与映射结果不一致' });
+});
 export type ListQuery = z.infer<typeof listQuerySchema>;
 export type AudienceRule = z.infer<typeof ruleSchema>;
 export type AudienceRules = z.infer<typeof rulesSchema>;
@@ -89,6 +210,21 @@ export type Catalog = { metadata: Metadata[]; events: EventModel[] };
 export type ValidationIssue = { path: string; message: string };
 export type ListResponse<T> = { data: T[]; pagination: { page: number; pageSize: number; total: number } };
 export type ApiErrorBody = { error: { code: string; message: string; details: ValidationIssue[]; requestId: string } };
+export type AiAudienceResourceType = z.infer<typeof aiAudienceResourceTypeSchema>;
+export type AiAudienceResourceRef = z.infer<typeof aiAudienceResourceRefSchema>;
+export type AiAudienceClarification = z.infer<typeof aiAudienceClarificationSchema>;
+export type AiAudienceGenerateRequest = z.infer<typeof aiAudienceGenerateRequestSchema>;
+export type AuthLoginInput = z.infer<typeof authLoginInputSchema>;
+export type AuthUser = z.infer<typeof authUserSchema>;
+export type UserRole = z.infer<typeof userRoleSchema>;
+export type ManagedUser = z.infer<typeof managedUserSchema>;
+export type CreateUserInput = z.infer<typeof createUserInputSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserInputSchema>;
+export type UserListQuery = z.infer<typeof userListQuerySchema>;
+export type AiAudienceSignal = z.infer<typeof aiAudienceSignalSchema>;
+export type AiAudienceParameter = z.infer<typeof aiAudienceParameterSchema>;
+export type AiAudienceMapping = z.infer<typeof aiAudienceMappingSchema>;
+export type AiAudienceGenerateResult = z.infer<typeof aiAudienceGenerateResultSchema>;
 
 export function fieldIssues(field: FieldInput): ValidationIssue[] {
   const issues: ValidationIssue[] = [];

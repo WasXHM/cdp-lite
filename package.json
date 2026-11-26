@@ -3,26 +3,37 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.18.3",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
+    "prepare": "husky",
     "dev": "pnpm --parallel --filter './apps/*' dev",
     "build": "pnpm --filter @cdp/contracts build && pnpm --filter @cdp/webapi build && pnpm --filter @cdp/webapp build",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "check:staged": "node scripts/git-hooks/check-staged.mjs && lint-staged",
+    "hooks:install:server": "node scripts/git-hooks/install-pre-receive.mjs",
     "test:integration": "CDP_INTEGRATION=1 vitest run apps/webapi/src/__tests__/integration.test.ts",
     "test:e2e": "playwright test",
     "db:migrate": "pnpm --filter @cdp/webapi db:migrate",
     "db:seed": "pnpm --filter @cdp/webapi db:seed",
+    "auth:set-admin": "pnpm --filter @cdp/webapi auth:set-admin",
     "docs:api": "pnpm --filter @cdp/webapi docs:api"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^9.37.0",
     "@playwright/test": "^1.56.0",
     "@types/node": "^22.18.0",
     "eslint": "^9.37.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
     "vitest": "^3.2.4"

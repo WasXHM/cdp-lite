@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { stringify } from 'yaml';
-import { audienceSchema, enumSchema, eventSchema, fieldSchema, metadataSchema, metricSchema, rulesSchema } from '@cdp/contracts';
+import { aiAudienceGenerateRequestSchema, aiAudienceGenerateResultSchema, audienceSchema, authLoginInputSchema, authUserSchema, createUserInputSchema, enumSchema, eventSchema, fieldSchema, managedUserSchema, metadataSchema, metricSchema, rulesSchema, updateUserInputSchema } from '@cdp/contracts';
 
 const entity = { id: z.string().uuid(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() };
 const enumValue = enumSchema.extend(entity);
@@ -20,6 +20,13 @@ const sourceSchemas = {
   AudienceInput: audienceSchema, AudiencePatch: audienceSchema.partial().extend({ revision: z.number().int().positive() }).strict(),
   Audience: audience, AudienceSummary: audience.omit({ rules: true }),
   Rules: rulesSchema,
+  AiAudienceGenerateRequest: aiAudienceGenerateRequestSchema,
+  AiAudienceGenerateResult: aiAudienceGenerateResultSchema,
+  AuthLoginInput: authLoginInputSchema,
+  AuthUser: authUserSchema,
+  CreateUserInput: createUserInputSchema,
+  UpdateUserInput: updateUserInputSchema,
+  ManagedUser: managedUserSchema,
   Error: z.object({ error: z.object({ code: z.string(), message: z.string(), details: z.array(z.object({ path: z.string(), message: z.string() })), requestId: z.string().uuid() }) }),
   Pagination: z.object({ page: z.number().int().positive(), pageSize: z.number().int().min(1).max(100), total: z.number().int().nonnegative() }),
 };
@@ -41,6 +48,47 @@ const listResponse = (name: string) => ({
   description: '分页列表', content: json({ type: 'object', required: ['data', 'pagination'], properties: { data: { type: 'array', items: ref(name) }, pagination: ref('Pagination') } }),
 });
 const paths: Record<string, unknown> = {};
+paths['/auth/login'] = {
+  post: {
+    summary: '用户名密码登录', tags: ['身份认证'], security: [], requestBody: body(ref('AuthLoginInput')),
+    responses: { 200: success(ref('AuthUser')), default: failure },
+  },
+};
+paths['/auth/me'] = {
+  get: { summary: '读取当前登录用户', tags: ['身份认证'], responses: { 200: success(ref('AuthUser')), default: failure } },
+};
+paths['/auth/logout'] = {
+  post: { summary: '注销当前会话', tags: ['身份认证'], security: [], responses: { 204: { description: '注销成功，无响应体' }, default: failure } },
+};
+paths['/users'] = {
+  get: {
+    summary: '用户列表（仅系统管理员）', tags: ['用户管理'],
+    parameters: [
+      { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+      { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+      { name: 'keyword', in: 'query', schema: { type: 'string', maxLength: 100 } },
+      { name: 'role', in: 'query', schema: { type: 'string', enum: ['ADMIN', 'USER'] } },
+      { name: 'status', in: 'query', schema: { type: 'string', enum: ['ENABLED', 'DISABLED'] } },
+    ],
+    responses: { 200: listResponse('ManagedUser'), default: failure },
+  },
+  post: {
+    summary: '创建用户（仅系统管理员）', tags: ['用户管理'], requestBody: body(ref('CreateUserInput')),
+    responses: { 201: success(ref('ManagedUser')), default: failure },
+  },
+};
+paths['/users/{id}'] = {
+  parameters: pathParams('/users/{id}'),
+  patch: {
+    summary: '更新用户或重置密码（仅系统管理员）', tags: ['用户管理'], requestBody: body(ref('UpdateUserInput')),
+    responses: { 200: success(ref('ManagedUser')), default: failure },
+  },
+  delete: {
+    summary: '删除用户（仅系统管理员）', tags: ['用户管理'],
+    description: '不能删除当前登录用户；系统必须始终保留至少一个已启用的系统管理员。',
+    responses: { 204: { description: '删除成功，无响应体' }, default: failure },
+  },
+};
 const resources = [
   { path: '/metadata', name: 'Metadata', input: 'Metadata', title: '标签 / 属性', id: 'id', detail: true },
   { path: '/metadata/{id}/enum-values', name: 'EnumValue', input: 'Enum', title: '元数据枚举值', id: 'valueId', detail: false },
@@ -73,6 +121,14 @@ for (const resource of resources) {
 paths['/audiences/validate-rules'] = {
   post: { summary: '规则预校验', tags: ['人群'], requestBody: body({ type: 'object', additionalProperties: false, required: ['rules'], properties: { rules: ref('Rules') } }), responses: { 200: success({ type: 'object', properties: { valid: { const: true } } }), default: failure } },
 };
+paths['/audiences/generate-rules'] = {
+  post: {
+    summary: '根据人群特点生成直接映射或推导型规则草稿', tags: ['人群'],
+    description: '仅使用启用元数据生成建议规则，不查询用户明细、不计算人群、不持久化。',
+    requestBody: body(ref('AiAudienceGenerateRequest')),
+    responses: { 200: success(ref('AiAudienceGenerateResult')), default: failure },
+  },
+};
 paths['/audiences/{id}/copy'] = {
   parameters: pathParams('/audiences/{id}/copy'),
   post: { summary: '复制人群为独立草稿', tags: ['人群'], requestBody: { ...body({ type: 'object', additionalProperties: false }), required: false }, responses: { 201: success(ref('Audience')), default: failure } },
@@ -100,11 +156,17 @@ const schemas = Object.fromEntries(Object.entries(sourceSchemas).map(([name, sch
 const spec = {
   openapi: '3.1.0',
   info: {
-    title: 'CDP Lite API', version: '1.0.0',
-    description: '本地受控演示管理员模式，无公网鉴权。只保存规则，不执行人群计算。时间统一 UTC ISO 8601。400 格式错误；404 不存在；409 引用、编码、revision 冲突；422 语义校验失败；500 内部错误。',
+    title: 'CDP Lite API', version: '1.3.0',
+    description: '使用用户名密码和服务端会话进行身份认证。支持 AI 生成可审阅规则草稿，但只保存用户最终确认的规则，不执行人群计算。时间统一 UTC ISO 8601。',
   },
   servers: [{ url: 'http://localhost:3000/api/v1', description: '本地开发' }],
-  paths, components: { schemas, responses: { Error: { description: '统一错误；details.path 指向字段或具体规则', content: json(ref('Error')) } } },
+  security: [{ cookieAuth: [] }],
+  paths,
+  components: {
+    securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'cdp_session' } },
+    schemas,
+    responses: { Error: { description: '统一错误；details.path 指向字段或具体规则', content: json(ref('Error')) } },
+  },
 };
 await writeFile(new URL('../../../../docs/openapi.yaml', import.meta.url), stringify(spec), 'utf8');
 console.info('已从共享 Zod 契约生成 docs/openapi.yaml');

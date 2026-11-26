@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx src/migrations/run.ts",
     "db:seed": "tsx src/migrations/seed.ts",
+    "auth:set-admin": "tsx src/auth/bootstrap.ts",
     "docs:api": "tsx src/schemas/openapi.ts"
   },
   "dependencies": {

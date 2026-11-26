@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Drawer, Form, Input, Select, Space, Tooltip } from 'antd';
-import { Question } from '@phosphor-icons/react';
+import { Question, Sparkle } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { audienceSchema, rulesSchema, validateRules, type Audience, type AudienceRules, type EventModel, type Metadata, type ValidationIssue } from '@cdp/contracts';
 import { ApiError, getDetail, request } from '../lib/api';
 import { ActionLink, ErrorNotice, PageHeading, QueryState } from '../components/Feedback';
 import { useLeaveGuard } from '../hooks/useLeaveGuard';
 import { RuleBuilder } from '../features/audiences/components/RuleBuilder';
+import { AiRuleComposerDrawer } from '../features/audiences/components/AiRuleComposerDrawer';
 
 export function AudienceEdit() {
   const { id } = useParams();
@@ -21,6 +22,7 @@ function AudienceForm({ initial }: { initial?: Audience }) {
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const allowLeave = useLeaveGuard(dirty);
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -73,12 +75,13 @@ function AudienceForm({ initial }: { initial?: Audience }) {
             </div>
           </Form>
         </section>
-        <div className="section-heading rule-section-heading"><div className="rule-heading-title"><h2>筛选规则</h2><span className="muted"><span className="numeric">{rules.length}</span> 组 / <span className="numeric">{ruleCount}</span> 条</span></div><div className="rule-heading-actions"><Tooltip title="组内 AND，组间 OR。仅保存规则，不执行人群计算。" trigger={['hover', 'focus']}><Button type="text" aria-label="规则说明" icon={<Question size={17} />} /></Tooltip><Button onClick={() => setPreview(true)}>查看规则 JSON</Button></div></div>
+        <div className="section-heading rule-section-heading"><div className="rule-heading-title"><h2>筛选规则</h2><span className="muted"><span className="numeric">{rules.length}</span> 组 / <span className="numeric">{ruleCount}</span> 条</span></div><div className="rule-heading-actions"><Button className="ai-entry-button" icon={<Sparkle size={16} />} onClick={() => setAiOpen(true)}>AI 圈人</Button><Tooltip title="组内 AND，组间 OR。仅保存规则，不执行人群计算。" trigger={['hover', 'focus']}><Button type="text" aria-label="规则说明" icon={<Question size={17} />} /></Tooltip><Button onClick={() => setPreview(true)}>查看规则 JSON</Button></div></div>
         <ErrorNotice error={mutation.error} />
         <RuleBuilder rules={rules} issues={issues} onChange={updated => { setRules(updated); setDirty(true); setIssues([]); }} />
         <div className="save-bar"><span role="status">{dirty ? '有未保存的修改' : initial ? '规则已保存' : '尚未保存'}</span><Space><Button loading={mutation.isPending} onClick={() => mutation.mutate({ onlyValidate: true })}>校验规则</Button><Button type="primary" loading={mutation.isPending} onClick={() => form.submit()}>保存人群</Button></Space></div>
       </div>
     </div>
+    <AiRuleComposerDrawer open={aiOpen} currentRules={rules} onClose={() => setAiOpen(false)} onApply={updated => { setRules(updated); setDirty(true); setIssues([]); }} />
     <Drawer title="规则 JSON" width={640} open={preview} onClose={() => setPreview(false)}><p className="muted">只读 · Schema v1 · 内层 AND / 外层 OR</p><pre className="json-preview">{JSON.stringify(rules, null, 2)}</pre></Drawer>
   </>;
 }

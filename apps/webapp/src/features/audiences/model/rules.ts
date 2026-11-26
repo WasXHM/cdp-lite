@@ -1,4 +1,6 @@
-import type { AudienceRule, AudienceRules, EventRule } from '@cdp/contracts';
+import { rulesSchema, type AudienceRule, type AudienceRules, type EventRule } from '@cdp/contracts';
+
+export type GeneratedRuleApplyMode = 'REPLACE' | 'APPEND_OR';
 
 export function createRule(type: AudienceRule['metadataType']): AudienceRule {
   return type === 'EVENT'
@@ -12,3 +14,7 @@ export const removeRule = (rules: AudienceRules, groupIndex: number, ruleIndex: 
 export const updateRule = (rules: AudienceRules, groupIndex: number, ruleIndex: number, rule: AudienceRule): AudienceRules => rules.map((group, index) => index === groupIndex ? group.map((current, position) => position === ruleIndex ? rule : current) : group);
 export const changeRuleType = (rules: AudienceRules, groupIndex: number, ruleIndex: number, type: AudienceRule['metadataType']) => updateRule(rules, groupIndex, ruleIndex, createRule(type));
 export const changeEventModel = (rule: EventRule, eventId: string): EventRule => ({ ...rule, eventId, dimensionFilters: [], aggregation: { type: 'COUNT', metricId: null }, operator: 'GTE', value: 1 });
+export function applyGeneratedRules(current: AudienceRules, generated: AudienceRules, mode: GeneratedRuleApplyMode): AudienceRules {
+  const existing = current.filter(group => group.length > 0);
+  return rulesSchema.parse(mode === 'REPLACE' ? generated : [...existing, ...generated]);
+}

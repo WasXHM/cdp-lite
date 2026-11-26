@@ -1,0 +1,108 @@
+#!/bin/sh
+
+# This hook runs inside a bare remote repository. Keep it dependency-free:
+# a Git server should not need this project's Node.js dependencies installed.
+set -eu
+
+MAX_FILE_SIZE=$((5 * 1024 * 1024))
+TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/cdp-lite-pre-receive.XXXXXX")
+UPDATES_FILE="$TEMP_ROOT/updates"
+CANDIDATES_FILE="$TEMP_ROOT/candidates"
+COMMITS_FILE="$TEMP_ROOT/commits"
+FAILED=0
+
+cleanup() {
+  rm -rf "$TEMP_ROOT"
+}
+
+trap cleanup EXIT HUP INT TERM
+cat >"$UPDATES_FILE"
+: >"$CANDIDATES_FILE"
+
+is_zero_oid() {
+  case "$1" in
+    *[!0]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Collect commits introduced by every ref update. Deleted refs have no new
+# commits. --not --all prevents a newly created branch from rechecking history
+# that the remote already contains.
+while read -r old_oid new_oid ref_name; do
+  if is_zero_oid "$new_oid"; then
+    continue
+  fi
+
+  if is_zero_oid "$old_oid"; then
+    git rev-list "$new_oid" --not --all >>"$CANDIDATES_FILE"
+  else
+    git rev-list "$old_oid..$new_oid" >>"$CANDIDATES_FILE"
+  fi
+done <"$UPDATES_FILE"
+
+sort -u "$CANDIDATES_FILE" >"$COMMITS_FILE"
+
+while read -r commit_oid; do
+  if [ -z "$commit_oid" ]; then
+    continue
+  fi
+
+  subject=$(git log -1 --format=%s "$commit_oid")
+  subject_length=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+
+  case "$subject" in
+    "Merge "*|"Revert \""*) ;;
+    *)
+      if ! printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9][a-z0-9._/-]*\))?!?: .+'; then
+        echo "pre-receive: $commit_oid 的提交消息不符合 Conventional Commits：$subject" >&2
+        FAILED=1
+      fi
+      ;;
+  esac
+
+  if [ "$subject_length" -gt 100 ]; then
+    echo "pre-receive: $commit_oid 的提交消息首行超过 100 个字符。" >&2
+    FAILED=1
+  fi
+
+  whitespace_output=$(git diff-tree --check --root -r --no-commit-id "$commit_oid" || true)
+  if [ -n "$whitespace_output" ]; then
+    echo "pre-receive: $commit_oid 包含空白错误或冲突标记：" >&2
+    printf '%s\n' "$whitespace_output" >&2
+    FAILED=1
+  fi
+
+  changed_files="$TEMP_ROOT/files-$commit_oid"
+  git diff-tree --root --no-commit-id --name-only -r --diff-filter=ACM "$commit_oid" >"$changed_files"
+
+  while IFS= read -r file_path; do
+    if [ -z "$file_path" ]; then
+      continue
+    fi
+
+    file_name=${file_path##*/}
+    case "$file_name" in
+      .env.example|.env.*.example) ;;
+      .env|.env.*|*.pem|*.key|*.p12|*.pfx|id_rsa|id_ed25519)
+        echo "pre-receive: 禁止提交疑似敏感文件：$file_path" >&2
+        FAILED=1
+        ;;
+    esac
+
+    blob_oid=$(git rev-parse "$commit_oid:$file_path")
+    file_size=$(git cat-file -s "$blob_oid")
+    if [ "$file_size" -gt "$MAX_FILE_SIZE" ]; then
+      echo "pre-receive: 文件超过 5 MiB，请改用对象存储或 Git LFS：$file_path" >&2
+      FAILED=1
+    fi
+  done <"$changed_files"
+done <"$COMMITS_FILE"
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "pre-receive: 推送被拒绝，请修复上述问题。" >&2
+  exit 1
+fi
+
+commit_count=$(wc -l <"$COMMITS_FILE" | tr -d ' ')
+echo "pre-receive: $commit_count 个新提交校验通过。"

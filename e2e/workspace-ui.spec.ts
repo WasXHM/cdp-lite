@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
+const credentials = { username: 'e2e_admin', password: 'e2e-admin-password' };
+test.beforeEach(async ({ page, request }) => {
+  expect((await page.request.post('/api/v1/auth/login', { data: credentials })).status()).toBe(200);
+  expect((await request.post('/api/v1/auth/login', { data: credentials })).status()).toBe(200);
+});
+
 async function expectNoOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
@@ -131,4 +137,34 @@ test('工作台状态：加载、错误重试、筛选为空和表单校验', as
   await expect(page.getByLabel('字段名称', { exact: true })).toHaveAttribute('aria-invalid', 'true');
   await expectNoOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('validation-390.png'), fullPage: true });
+});
+
+test('AI 圈人：审阅推导定义与参数来源', async ({ page }, testInfo) => {
+  const eventId = '11111111-1111-4111-8111-111111111111';
+  await page.route('**/api/v1/audiences/generate-rules', route => route.fulfill({
+    status: 200,
+    json: { data: {
+      requestId: '22222222-2222-4222-8222-222222222222', catalogRevision: `sha256:${'a'.repeat(64)}`,
+      summary: '最近 7 天至少购买 1 次',
+      rules: [[{ metadataType: 'EVENT', eventId, timeRange: { type: 'RELATIVE', unit: 'DAY', value: 7 }, dimensionFilters: [], aggregation: { type: 'COUNT', metricId: null }, operator: 'GTE', value: 1 }]],
+      mappings: [{
+        key: 'activity', sourceText: '最近几天的活跃用户', status: 'DERIVED', resource: null,
+        rulePaths: ['rules[0][0]'], explanation: '没有活跃度字段，使用近期购买作为代理信号', candidates: [],
+        derivation: { concept: '近期活跃', suggestedDefinition: '最近 7 天至少购买 1 次', signals: [{ resourceType: 'EVENT', resourceId: eventId, name: '商品购买', role: '近期参与', reason: '购买是实际业务互动' }] },
+        parameters: [{ path: 'rules[0][0].timeRange', label: '时间窗口', value: { type: 'RELATIVE', unit: 'DAY', value: 7 }, displayValue: '最近 7 天', source: 'AI_DERIVED', explanation: '将最近几天解释为 7 天' }],
+      }],
+      warnings: ['该阈值为启发式建议'], requiresConfirmation: false, hasUnmappedSegments: false,
+    } },
+  }));
+  await page.goto('/audiences/new');
+  await page.getByRole('button', { name: 'AI 圈人' }).click();
+  await page.getByLabel('描述目标人群特点').fill('请帮我圈出最近几天的活跃用户');
+  await page.getByRole('button', { name: '生成规则' }).click();
+  await expect(page.getByText('AI 建议定义')).toBeVisible();
+  await expect(page.getByRole('article').getByText('最近 7 天至少购买 1 次', { exact: true })).toBeVisible();
+  await expect(page.getByText('商品购买', { exact: true })).toBeVisible();
+  await expect(page.getByText('AI 推导', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '应用到规则' })).toBeEnabled();
+  await expectNoOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('ai-derived-review.png'), fullPage: true });
 });

@@ -10,6 +10,8 @@
 - 行为模型：独立维度、数值指标、维度枚举值，父子归属与跨表字段编码唯一性校验。
 - 人群：列表、创建、编辑、复制、删除、JSON 只读预览与乐观并发版本检查。
 - 可视化规则编辑器：先选择类型，组内 AND、组间 OR；行为模型 → 时间 → 维度 → COUNT / SUM / AVG / MAX / MIN。
+- AI 圈人：输入人群特点后，基于启用元数据生成直接映射或推导型规则草稿；展示代理信号、参数来源、歧义和未映射项，确认后可替换或追加到手工规则。
+- 用户与权限：用户名密码登录、HttpOnly 会话 Cookie、登录限流、刷新恢复身份与安全注销；系统管理员可在设置页创建、更新、停用、重置密码或删除用户。
 - 共享结构与值类型校验、服务端引用校验、事务内删除保护，以及定位到规则的错误反馈。
 - MySQL 迁移与可重复执行的演示种子数据；本地 Chrome 端到端测试与隔离 MySQL 集成测试。
 - 紧凑企业工作台：深色顶栏、上下文导航、高密度表格与配置表单，支持移动抽屉和键盘操作；视觉基线见 `docs/UI界面风格参考.png`。
@@ -40,11 +42,31 @@ pnpm install
 cp .env.example .env
 docker compose up -d --wait mysql
 pnpm db:migrate
+# 下一行回车后输入至少 12 位管理员密码，输入内容不会回显
+read -rs CDP_ADMIN_PASSWORD
+AUTH_ADMIN_PASSWORD="$CDP_ADMIN_PASSWORD" pnpm auth:set-admin
+unset CDP_ADMIN_PASSWORD
 pnpm db:seed
 pnpm dev
 ```
 
-访问 **http://localhost:5173**。API 地址为 `http://127.0.0.1:3000/api/v1`，浏览器请求由 Vite 代理转发。
+访问 **http://localhost:5173**，使用用户名 `admin` 和上一步设置的密码登录。API 地址为 `http://127.0.0.1:3000/api/v1`，浏览器请求由 Vite 代理转发。
+
+`auth:set-admin` 可重复执行，用于创建或重置管理员账号；执行后会使该账号已有会话全部失效。可用 `AUTH_ADMIN_USERNAME` 与 `AUTH_ADMIN_DISPLAY_NAME` 覆盖默认用户名和显示名称。密码使用带随机盐的 scrypt 哈希保存，浏览器只持有 HttpOnly Cookie，数据库只保存会话令牌的 SHA-256 摘要。
+
+登录后，系统管理员可通过右上角齿轮进入“设置 → 用户管理”。`ADMIN` 与 `USER` 都可以使用现有业务功能，只有 `ADMIN` 可以调用用户管理接口。系统禁止删除当前登录用户、停用或降级自己，以及删除或停用最后一个可用管理员。
+
+AI 圈人默认关闭，不影响手工规则编辑。启用 OpenAI-compatible Provider 时配置：
+
+```dotenv
+AI_RULE_GENERATION_ENABLED=true
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://your-provider.example/v1
+AI_MODEL=your-model
+AI_API_KEY=your-server-side-key
+```
+
+Provider 凭据仅由 Web API 读取。生成请求只发送人群描述和启用的业务元数据目录，不发送用户明细；生成结果仍需在页面应用并通过“保存人群”持久化。
 
 Docker 配置创建项目专属 `cdp_lite` 数据库与账号，数据保存在 `cdp-lite_mysql-data` 卷中。初始密码在 `.env.example` 中；修改 `.env` 时也要保持数据库实际账号密码一致。环境变量优先于 `.env`。
 
@@ -78,12 +100,16 @@ DATABASE_PORT=13306 DATABASE_USER=cdp_lite DATABASE_PASSWORD=change_me pnpm dev
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | 所有工作区类型检查 |
 | `pnpm test` | 纯规则与编辑状态单元测试；默认跳过数据库测试 |
+| `pnpm check` | ESLint、类型检查与单元测试（也是 `pre-push` 校验） |
 | `pnpm build` | 共享包、API 和前端生产构建 |
 | `pnpm db:migrate` | 应用版本化数据库迁移 |
 | `pnpm db:seed` | 添加演示配置 |
+| `pnpm auth:set-admin` | 创建或重置管理员账号（需设置 `AUTH_ADMIN_PASSWORD`） |
 | `pnpm docs:api` | 从共享 Schema 重新生成 OpenAPI 文档 |
 | `pnpm test:integration` | 隔离 MySQL API 集成测试 |
 | `pnpm test:e2e` | 启动隔离前后端并执行 Chrome UI 验收 |
+
+项目使用 Husky 管理 `pre-commit`、`commit-msg` 和 `pre-push`，并提供独立的服务端 `pre-receive`。安装、规则、演示和绕过方式见 [Git hooks 学习说明](docs/GIT_HOOKS.md)。
 
 ### 数据库和端到端测试
 
@@ -119,7 +145,7 @@ pnpm test:e2e
 }
 ```
 
-400 表示请求格式错误；404 为资源不存在或不属于父级；409 为引用、编码、不可变字段或版本冲突；422 为业务语义校验失败。
+400 表示请求格式错误；401 表示未登录或凭据无效；404 为资源不存在或不属于父级；409 为引用、编码、不可变字段或版本冲突；422 为业务语义校验失败。
 
 人群更新必须携带当前 `revision`，成功后递增；冲突时刷新后重新编辑。规则校验接口与正式保存复用同一个服务。
 
@@ -143,6 +169,6 @@ pnpm --filter @cdp/webapi start
 
 前端静态产物在 `apps/webapp/dist`，API 入口在 `apps/webapi/dist/server.js`。API 构建将共享契约打包，不依赖运行时执行工作区 TypeScript。
 
-本版明确为本地 / 受控管理员环境，API 固定监听 `127.0.0.1`。对外部署前，应由受控网关提供身份认证，并配置 SPA history fallback、同源 `/api` 代理和正确的 `CORS_ORIGIN`。V1 不含登录页面或权限体系。
+API 默认监听 `127.0.0.1`。生产部署还应配置 HTTPS、SPA history fallback、同源 `/api` 代理和正确的 `CORS_ORIGIN`。当前实现 `ADMIN` 与 `USER` 两级角色，尚未实现按业务资源细分的授权、密码找回、MFA 或集中身份提供商接入。
 
 停止数据库使用 `docker compose --profile test stop`；不要使用 `down -v`，除非确实希望删除演示数据库卷。

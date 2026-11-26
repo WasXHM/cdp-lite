@@ -5,10 +5,14 @@ import type { Audience, AudienceRules, Dimension, EnumValue, EventModel, EventRu
 
 const enabled = process.env.CDP_INTEGRATION === '1';
 describe.skipIf(!enabled)('MySQL 8 API 集成验收', () => {
-  let api: ReturnType<typeof supertest>;
+  let api: ReturnType<typeof supertest.agent>;
   let database: (typeof import('../config/database.js'))['database'];
   const cleanups: string[] = [];
   const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+  const authUsername = `integration_${suffix}`;
+  const authPassword = `integration-password-${suffix}`;
+  const managedUsername = `operator_${suffix}`;
+  const managedUsernameUpdated = `operator_updated_${suffix}`;
   let tag: Metadata;
   let age: Metadata;
   let event: EventModel;
@@ -34,7 +38,13 @@ describe.skipIf(!enabled)('MySQL 8 API 集成验收', () => {
     process.env.DATABASE_PASSWORD = 'change_me';
     database = (await import('../config/database.js')).database;
     await (await import('../migrations/run.js')).migrate();
-    api = supertest((await import('../app.js')).createApp().callback());
+    await (await import('../services/auth.js')).setAdminUser({ username: authUsername, password: authPassword, displayName: '集成测试管理员' });
+    const app = (await import('../app.js')).createApp();
+    await supertest(app.callback()).get('/api/v1/metadata').expect(401);
+    await supertest(app.callback()).post('/api/v1/auth/login').send({ username: authUsername, password: 'incorrect-password' }).expect(401);
+    api = supertest.agent(app.callback());
+    await api.post('/api/v1/auth/login').send({ username: authUsername, password: authPassword }).expect(200);
+    expect((await api.get('/api/v1/auth/me').expect(200)).body.data).toMatchObject({ username: authUsername, role: 'ADMIN' });
     tag = await create('/metadata', { ...field, metadataType: 'TAG', fieldName: `tag_${suffix}` });
     enumValue = await create(`/metadata/${tag.id}/enum-values`, { label: '金卡', value: 'GOLD' });
     age = await create('/metadata', { ...field, metadataType: 'ATTRIBUTE', fieldName: `age_${suffix}`, dataType: 'Number', displayType: 'NUMBER', isEnum: false });
@@ -52,7 +62,49 @@ describe.skipIf(!enabled)('MySQL 8 API 集成验收', () => {
   }, 60000);
   afterAll(async () => {
     if (api) for (const path of cleanups.reverse()) await api.delete(`/api/v1${path}`);
+    const { UserModel } = await import('../models/index.js');
+    await UserModel.destroy({ where: { username: managedUsername } });
+    await UserModel.destroy({ where: { username: managedUsernameUpdated } });
+    await UserModel.destroy({ where: { username: authUsername } });
     await database?.close();
+  });
+  it('系统管理员管理用户，普通用户无权访问设置接口', async () => {
+    const initialPassword = `operator-password-${suffix}`;
+    const nextPassword = `operator-new-password-${suffix}`;
+    const created = await api.post('/api/v1/users').send({
+      username: managedUsername, password: initialPassword, displayName: '运营用户', role: 'USER', status: 'ENABLED',
+    }).expect(201);
+    const userId = created.body.data.id as string;
+    expect(created.body.data).toMatchObject({ username: managedUsername, displayName: '运营用户', role: 'USER', status: 'ENABLED' });
+    expect(created.body.data.passwordHash).toBeUndefined();
+    const duplicate = await api.post('/api/v1/users').send({
+      username: managedUsername, password: initialPassword, displayName: '重复用户', role: 'USER', status: 'ENABLED',
+    }).expect(409);
+    expect(duplicate.body.error.code).toBe('USERNAME_CONFLICT');
+
+    const regular = supertest.agent((await import('../app.js')).createApp().callback());
+    await regular.post('/api/v1/auth/login').send({ username: managedUsername, password: initialPassword }).expect(200);
+    expect((await regular.get('/api/v1/users').expect(403)).body.error.code).toBe('AUTH_FORBIDDEN');
+    await regular.get('/api/v1/metadata').expect(200);
+
+    const updated = await api.patch(`/api/v1/users/${userId}`).send({
+      username: managedUsernameUpdated, displayName: '运营用户（已更新）', password: nextPassword, role: 'USER', status: 'ENABLED',
+    }).expect(200);
+    expect(updated.body.data).toMatchObject({ username: managedUsernameUpdated, displayName: '运营用户（已更新）' });
+    await regular.get('/api/v1/metadata').expect(401);
+    await regular.post('/api/v1/auth/login').send({ username: managedUsernameUpdated, password: initialPassword }).expect(401);
+    await regular.post('/api/v1/auth/login').send({ username: managedUsernameUpdated, password: nextPassword }).expect(200);
+
+    const listed = await api.get(`/api/v1/users?keyword=${managedUsernameUpdated}`).expect(200);
+    expect(listed.body.pagination.total).toBe(1);
+    expect(listed.body.data[0].id).toBe(userId);
+    const currentAdminId = (await api.get('/api/v1/auth/me').expect(200)).body.data.id;
+    expect((await api.delete(`/api/v1/users/${currentAdminId}`).expect(409)).body.error.code).toBe('SELF_MANAGEMENT_FORBIDDEN');
+    expect((await api.patch(`/api/v1/users/${currentAdminId}`).send({ role: 'USER' }).expect(409)).body.error.code).toBe('SELF_MANAGEMENT_FORBIDDEN');
+
+    await api.delete(`/api/v1/users/${userId}`).expect(204);
+    await regular.get('/api/v1/metadata').expect(401);
+    await regular.post('/api/v1/auth/login').send({ username: managedUsernameUpdated, password: nextPassword }).expect(401);
   });
   it('保存后重新读取，二维数组与值类型完全一致', async () => {
     const response = await api.get(`/api/v1/audiences/${audience.id}`).expect(200);

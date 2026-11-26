@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Drawer } from 'antd';
+import { App, Button, Drawer } from 'antd';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Tag, UserCircle, Lightning, UsersThree, List } from '@phosphor-icons/react';
+import { Tag, UserCircle, Lightning, UsersThree, List, SignOut, GearSix } from '@phosphor-icons/react';
 import logoUrl from '../../assets/logo.svg';
+import { useAuth } from '../features/auth/AuthProvider';
 
 const links = [
   { path: '/audiences', label: '人群管理', icon: UsersThree },
@@ -11,7 +12,8 @@ const links = [
   { path: '/metadata/events', label: '行为模型', icon: Lightning },
 ];
 
-function Navigation({ onNavigate, section }: { onNavigate?: () => void; section?: 'audiences' | 'metadata' }) {
+function Navigation({ onNavigate, section }: { onNavigate?: () => void; section?: 'audiences' | 'metadata' | 'settings' }) {
+  if (section === 'settings') return <><div className="nav-label">设置</div><nav aria-label="设置导航"><NavLink to="/settings" onClick={onNavigate} className="nav-link active"><UserCircle size={17} aria-hidden="true" />用户管理</NavLink></nav></>;
   const visibleLinks = section ? links.filter(link => section === 'audiences' ? link.path === '/audiences' : link.path.startsWith('/metadata')) : links;
   return <>
     <div className="nav-label">{section === 'audiences' ? '人群管理' : section === 'metadata' ? '元数据管理' : '业务导航'}</div>
@@ -20,8 +22,10 @@ function Navigation({ onNavigate, section }: { onNavigate?: () => void; section?
 }
 
 export function AppLayout() {
+  const { user, logout } = useAuth();
+  const { message } = App.useApp();
   const location = useLocation();
-  const section = location.pathname.startsWith('/metadata') ? 'metadata' : 'audiences';
+  const section = location.pathname.startsWith('/settings') ? 'settings' : location.pathname.startsWith('/metadata') ? 'metadata' : 'audiences';
   const [navOpen, setNavOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -43,14 +47,14 @@ export function AppLayout() {
       <header className="topbar">
         <div className="topbar-brand"><Button className="nav-trigger" ref={triggerRef} aria-label="打开导航" aria-expanded={navOpen} aria-controls={navOpen ? 'mobile-navigation' : undefined} icon={<List size={20} />} onClick={() => setNavOpen(true)} /><NavLink to="/audiences" className="brand"><img src={logoUrl} alt="" aria-hidden="true" /><span>CDP Lite</span></NavLink></div>
         <nav className="module-nav" aria-label="模块导航"><NavLink to="/audiences" className={section === 'audiences' ? 'active' : ''}>人群管理</NavLink><NavLink to="/metadata/tags" className={section === 'metadata' ? 'active' : ''}>元数据管理</NavLink></nav>
-        <div className="topbar-account"><span className="workspace-name">默认工作空间</span><span className="account-name">本地管理员</span><span className="avatar" aria-hidden="true">管</span></div>
+        <div className="topbar-account">{user.role === 'ADMIN' && <NavLink to="/settings" className={({ isActive }) => `settings-button${isActive ? ' active' : ''}`} aria-label="设置" title="设置"><GearSix size={18} aria-hidden="true" /></NavLink>}<span className="workspace-name">默认工作空间</span><span className="account-name">{user.displayName}</span><span className="avatar" aria-hidden="true">{user.displayName.slice(0, 1)}</span><Button className="logout-button" type="text" aria-label="退出登录" title="退出登录" icon={<SignOut size={17} />} onClick={() => void logout().catch(error => message.error(error instanceof Error ? error.message : '退出失败，请重试'))} /></div>
       </header>
       <aside className="sidebar"><Navigation section={section} /></aside>
       <div className="workspace">
         <main id="main-content" tabIndex={-1}><Outlet /></main>
       </div>
     </div>
-    <Drawer placement="left" width="min(296px, calc(100vw - 24px))" open={navOpen} onClose={() => setNavOpen(false)} destroyOnClose rootClassName="navigation-drawer" afterOpenChange={open => { if (!open) triggerRef.current?.focus(); }}>
+    <Drawer title="工作空间导航" placement="left" width="min(296px, calc(100vw - 24px))" open={navOpen} onClose={() => setNavOpen(false)} destroyOnClose rootClassName="navigation-drawer" afterOpenChange={open => { if (!open) triggerRef.current?.focus(); }}>
       <div id="mobile-navigation" className="mobile-navigation"><Navigation onNavigate={() => setNavOpen(false)} /></div>
     </Drawer>
   </>;

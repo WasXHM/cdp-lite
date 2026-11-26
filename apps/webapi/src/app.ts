@@ -4,12 +4,17 @@ import cors from '@koa/cors';
 import bodyParser from 'koa-bodyparser';
 import helmet from 'koa-helmet';
 import { errors } from './middleware/errors.js';
-import { router } from './routes/index.js';
+import { createRouter } from './routes/index.js';
 import { AppError } from './errors/AppError.js';
 import { env } from './config/env.js';
+import type { AiAudienceService } from './services/aiAudience.js';
+import { createAuthService, type AuthenticationService } from './services/auth.js';
+import { loadAuthentication } from './middleware/authentication.js';
 
-export function createApp() {
+export function createApp(options: { aiAudienceService?: AiAudienceService; authService?: AuthenticationService } = {}) {
   const app = new Koa();
+  const authService = options.authService ?? createAuthService();
+  const router = createRouter({ aiAudienceService: options.aiAudienceService, authService });
   app.use(async (ctx, next) => {
     ctx.state.requestId = randomUUID();
     ctx.set('X-Request-Id', ctx.state.requestId);
@@ -17,7 +22,7 @@ export function createApp() {
   });
   app.use(errors);
   app.use(helmet());
-  app.use(cors({ origin: ctx => ctx.get('Origin') === env.CORS_ORIGIN ? env.CORS_ORIGIN : '' }));
+  app.use(cors({ origin: ctx => ctx.get('Origin') === env.CORS_ORIGIN ? env.CORS_ORIGIN : '', credentials: true }));
   app.use(async (ctx, next) => {
     const origin = ctx.get('Origin');
     if (origin && origin !== env.CORS_ORIGIN && !['GET', 'HEAD', 'OPTIONS'].includes(ctx.method))
@@ -27,12 +32,12 @@ export function createApp() {
   app.use(bodyParser({ enableTypes: ['json'], jsonLimit: '1mb' }));
   app.use(async (ctx, next) => {
     const start = Date.now();
-    ctx.state.identity = { mode: 'local-demo', role: 'administrator' };
     try { await next(); }
     finally {
       if (env.NODE_ENV !== 'test') console.info(JSON.stringify({ requestId: ctx.state.requestId, method: ctx.method, path: ctx.path, status: ctx.status, durationMs: Date.now() - start }));
     }
   });
+  app.use(loadAuthentication(authService));
   app.use(router.routes());
   app.use(router.allowedMethods());
   app.use(() => { throw new AppError(404, 'NOT_FOUND', '接口不存在'); });

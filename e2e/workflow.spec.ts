@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
+const credentials = { username: 'e2e_admin', password: 'e2e-admin-password' };
+test.beforeEach(async ({ page, request }) => {
+  expect((await page.request.post('/api/v1/auth/login', { data: credentials })).status()).toBe(200);
+  expect((await request.post('/api/v1/auth/login', { data: credentials })).status()).toBe(200);
+});
+
 async function choose(page: Page, label: string, text: string, index = 0) {
   await page.getByRole('combobox', { name: new RegExp(`^(?:\\*\\s*)?${label}$`) }).nth(index).press('ArrowDown');
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option-content').filter({ hasText: new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }).click();
